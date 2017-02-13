@@ -1,0 +1,72 @@
+怎样制作可引导软盘映像文件？
+
+
+
+由于我的本本没有软驱，但又要进行一些在软盘上的实验，所以写下了这篇文章，若有不对的地方，
+请指明：xuyufei13@gmail.com
+其中write.c程序来自http://linux.ccidnet.com/art/303/20021010/27272_1.html
+平台＋工具：
+OS:    ubuntu 7.04 linux
+Tools:    bximage
+问题描述：
+对于一个软盘映像文件（fdt.img），格式化为fat32格式，把自己写的引导程序（boot.bin）写入
+fdt.img第一扇区，使印象文件能成为可引导软盘映像文件，然后在fdt.img中添加文件。
+步骤：
+step 1:制作软盘映像文件fdt.img
+在中端输入bximage，打开bximage：
+========================================================================
+                                bximage
+                  Disk Image Creation Tool for Bochs
+        $Id: bximage.c,v 1.32 2006/06/16 07:29:33 vruppert Exp $
+========================================================================
+Do you want to create a floppy disk image or a hard disk image?
+Please type hd or fd. [hd] 这里输入fd（代表floppy disk）
+Choose the size of floppy disk image to create, in megabytes.
+Please type 0.16, 0.18, 0.32, 0.36, 0.72, 1.2, 1.44, 1.68, 1.72, or 2.88.
+[1.44] 这里直接按回车
+I will create a floppy image with
+  cyl=80
+  heads=2
+  sectors per track=18
+  total sectors=2880
+  total bytes=1474560
+What should I name the image?
+[a.img] 这里输入fdt.img
+Writing: [] Done.
+I wrote 1474560 bytes to test.img.
+The following line should appear in your bochsrc:
+  floppya: image="fdt.img", status=inserted
+Step2:格式化为fat32格式
+在终端输入（在有fdt.img的目录下）：
+/sbin/losetup /dev/loop0 fdt.img
+/sbin/mkfs.vfat /dev/loop0
+这里使用回馈设备loop0使设备和fdt.img关联
+然后用mkfs.vfat格式化fdt.img（vfat代表fat32格式）
+Step3：挂载fdt.img
+mount /dev/loop0 /mnt/temp
+这里，我们就可以向/mnt/temp写入文件了，它的效果就相当于向fdt.img写入文件，
+但这个时候的fdt.img是不能被boot.bin(自己写的引导程序)引导的
+Step4：通过write程序，把引导程序写入ftd.img第一扇区
+write.c
+#include  /* unistd.h 需要这个文件 */
+#include     /* 包含有read和write函数 */
+#include 
+int main()
+{
+  char boot_buf[512];
+   int floppy_desc, file_desc;
+  file_desc = open("./boot.bin", O_RDONLY);          ;boot.bin是我自己写的一个引导程序
+  read(file_desc, boot_buf, 510);
+  close(file_desc);
+  boot_buf[510] = 0x55;
+  boot_buf[511] = 0xaa;
+  floppy_desc = open("/dev/loop0", O_RDWR);      ；注意，这里是设备/dev/loop0，因为我们用loop0与fdt.img相关联
+  lseek(floppy_desc, 0, SEEK_CUR);
+  write(floppy_desc, boot_buf, 512);
+  close(floppy_desc);
+}
+编译write.c
+gcc write.c -o write
+运行write
+./write
+好了，现在fdt.img是一个可引导软盘映像文件了，若要加入文件，则把文件复制到/mnt/temp就可以了
